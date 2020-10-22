@@ -34,7 +34,7 @@ Since our data represnts every time a student makes a comment there are multiple
 
 EDGE <- count(D2, comment.to, comment.from)
 
-names(EDGE) <- c("from", "to", "count")
+names(EDGE) <- c("to", "from", "count")
 
 ```
 
@@ -53,6 +53,7 @@ names(V.TO) <- c("id", "gender.to", "major.to")
 
 #Make sure that the id variable in both dataframes has the same number of levels
 lvls <- sort(union(levels(V.FROM$id), levels(V.TO$id)))
+
 
 VERTEX <- full_join(mutate(V.FROM, id=factor(id, levels=lvls)),
     mutate(V.TO, id=factor(id, levels=lvls)), by = "id")
@@ -106,6 +107,37 @@ In Part II your task is to [look up](http://igraph.org/r/) in the igraph documen
 * The vertices are colored according to major
 * The vertices are sized according to the number of comments they have recieved
 
+```{r}
+colrs <- c("lightgreen", "tomato", "gold",'lightBlue')
+V(g)$color <- colrs[VERTEX$major]
+E(g)$arrow.size <- .5
+
+count_arrowsTo <- EDGE %>% count(to)
+vertex.size <- c()
+
+# find the count for all in-arrows 
+for(target in VERTEX$id){
+  vertex.notFound <- TRUE
+  for(target.id in c(1:length(count_arrowsTo$to))){
+    vertex.id <- as.character(count_arrowsTo$to[target.id])
+    if (target == vertex.id) {
+      vertex.count <- as.numeric(count_arrowsTo$n[target.id])
+      vertex.size <- append(vertex.size, vertex.count)
+      vertex.notFound <- FALSE
+    }
+  }
+  if (vertex.notFound) {
+    vertex.size <- append(vertex.size, 0)
+  }
+}
+
+V(g)$size <- (vertex.size + 5)*3
+par(mar=c(0,0,0,0))
+plot(g,layout=layout.fruchterman.reingold)
+
+```
+
+
 ## Part III
 
 Now practice with data from our class. This data is real class data directly exported from Qualtrics and you will need to wrangle it into shape before you can work with it. Import it into R as a data frame and look at it carefully to identify problems.
@@ -114,9 +146,61 @@ Please create a **person-network** with the data set hudk4050-classes.csv. To cr
 
 Once you have done this, also [look up](http://igraph.org/r/) how to generate the following network metrics:
 
+```{r}
+C1 <- read.csv("hudk4050-classes.csv",stringsAsFactors = FALSE, header = TRUE)
+
+C2 <- C1
+
+colnames(C2) <- C2[1,]
+
+C2 <- slice(C2, 3:49)
+C2 <- select(C2,1:8)
+
+library(tidyr)
+C2 <- unite(C2,"name",'First Name', 'Last Name', sep=" ")
+
+library(stringr)
+C2$name <- str_replace(C2$name, "`", "")
+C2$name <- str_to_title(C2$name)
+
+C2 <- C2 %>% mutate_at(2:7,list(toupper))
+C2 <- C2 %>% mutate_at(2:7,str_replace_all, " ", "")
+
+C3 <- C2 %>% gather(label,class,2:7,na.rm = TRUE,convert = FALSE) %>% select(name, class)
+C2 %>% gather(labelssss,classA,2:7,na.rm = TRUE,convert = FALSE)
+C3$count <- 1
+C3<- filter(C3,class != "")
+C3 <- unique(C3)
+C3 <- spread(C3, class, count)
+rownames(C3) <- C3$name
+C3 <- select(C3, -name, -HUDK4050)
+C3[is.na(C3)] <- 0
+
+C4<- as.matrix(C3)
+C4 <- C4 %*% t(C4)
+
+g <- graph.adjacency(C4,mode = "undirected", diag = FALSE)
+
+plot(g,layout = layout.fruchterman.reingold, vertex.size = 7, vertex.label.cex = 0.8, vertex.label.color = "black", vertex.color = 'orange')
+
+```
+
 * Betweeness centrality and dregree centrality. **Who is the most central person in the network according to these two metrics? Write a sentence or two that describes your interpretation of these metrics**
+```{r}
+sort(degree(g), decreasing = TRUE)
+sort(betweenness(g),decreasing = TRUE)
+```
+
+According to the graph, Guoliang Xu has the highest degree of centrality, which means he has the most connections. Yifei Zhang has the highest betweenness, which means he appears on most of the shortest path.
 
 * Color the nodes according to interest. Are there any clusters of interest that correspond to clusters in the network? Write a sentence or two describing your interpetation.
+
+```{r}
+ceb <- cluster_edge_betweenness(g) 
+plot(ceb, g) 
+```
+
+Accoring to the graph, there are two major groups/clusters and 11 smaller clusters. Yifei Zhang is in the middle of this two major groups.
 
 ### To Submit Your Assignment
 
